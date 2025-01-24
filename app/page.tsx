@@ -1,101 +1,167 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import {
+  loadTossPayments,
+  TossPaymentsWidgets,
+} from "@tosspayments/tosspayments-sdk";
+import { useEffect, useState } from "react";
+
+function generateRandomString() {
+  if (typeof window !== "undefined") {
+    return window.btoa(Math.random().toString()).slice(0, 20);
+  }
+  return ""; // 서버 환경일 경우 기본값 반환
+}
+
+// TODO: clientKey는 개발자센터의 결제위젯 연동 키 > 클라이언트 키로 바꾸세요.
+// TODO: 구매자의 고유 아이디를 불러와서 customerKey로 설정하세요. 이메일・전화번호와 같이 유추가 가능한 값은 안전하지 않습니다.
+// @docs https://docs.tosspayments.com/sdk/v2/js#토스페이먼츠-초기화
+const clientKey = "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
+const customerKey = generateRandomString();
+
+interface Amount {
+  currency: string;
+  value: number;
+}
+
+export default function CheckoutPage() {
+  const [amount, setAmount] = useState<Amount>({
+    currency: "KRW",
+    value: 50000,
+  });
+  const [ready, setReady] = useState(false);
+  const [widgets, setWidgets] = useState<TossPaymentsWidgets | null>(null);
+
+  useEffect(() => {
+    async function fetchPaymentWidgets() {
+      try {
+        // ------  SDK 초기화 ------
+        // @docs https://docs.tosspayments.com/sdk/v2/js#토스페이먼츠-초기화
+        const tossPayments = await loadTossPayments(clientKey);
+
+        // 회원 결제
+        // @docs https://docs.tosspayments.com/sdk/v2/js#tosspaymentswidgets
+        const widgets = tossPayments.widgets({
+          customerKey,
+        });
+        // 비회원 결제
+        // const widgets = tossPayments.widgets({ customerKey: ANONYMOUS });
+
+        setWidgets(widgets);
+      } catch (error) {
+        console.error("Error fetching payment widget:", error);
+      }
+    }
+
+    fetchPaymentWidgets();
+    // eslint-disable-next-line
+  }, [clientKey, customerKey]);
+
+  useEffect(() => {
+    async function renderPaymentWidgets() {
+      if (widgets == null) {
+        return;
+      }
+
+      // ------  주문서의 결제 금액 설정 ------
+      // TODO: 위젯의 결제금액을 결제하려는 금액으로 초기화하세요.
+      // TODO: renderPaymentMethods, renderAgreement, requestPayment 보다 반드시 선행되어야 합니다.
+      await widgets.setAmount(amount);
+
+      // ------  결제 UI 렌더링 ------
+      // @docs https://docs.tosspayments.com/sdk/v2/js#widgetsrenderpaymentmethods
+      await widgets.renderPaymentMethods({
+        selector: "#payment-method",
+        // 렌더링하고 싶은 결제 UI의 variantKey
+        // 결제 수단 및 스타일이 다른 멀티 UI를 직접 만들고 싶다면 계약이 필요해요.
+        // @docs https://docs.tosspayments.com/guides/v2/payment-widget/admin#새로운-결제-ui-추가하기
+        variantKey: "DEFAULT",
+      });
+
+      // ------  이용약관 UI 렌더링 ------
+      // @docs https://docs.tosspayments.com/reference/widget-sdk#renderagreement선택자-옵션
+      await widgets.renderAgreement({
+        selector: "#agreement",
+        variantKey: "AGREEMENT",
+      });
+
+      setReady(true);
+    }
+
+    renderPaymentWidgets();
+    // eslint-disable-next-line
+  }, [widgets]);
+
+  const updateAmount = async (amount: Amount) => {
+    setAmount(amount);
+    await widgets!.setAmount(amount);
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="wrapper">
+      <div className="box_section">
+        {/* 결제 UI */}
+        <div id="payment-method" />
+        {/* 이용약관 UI */}
+        <div id="agreement" />
+        {/* 쿠폰 체크박스 */}
+        <div style={{ paddingLeft: "24px" }}>
+          <div className="checkable typography--p">
+            <label
+              htmlFor="coupon-box"
+              className="checkable__label typography--regular"
+            >
+              <input
+                id="coupon-box"
+                className="checkable__input"
+                type="checkbox"
+                aria-checked="true"
+                disabled={!ready}
+                // ------  주문서의 결제 금액이 변경되었을 경우 결제 금액 업데이트 ------
+                // @docs https://docs.tosspayments.com/sdk/v2/js#widgetssetamount
+                onChange={async (event) => {
+                  await updateAmount({
+                    currency: amount.currency,
+                    value: event.target.checked
+                      ? amount.value - 5000
+                      : amount.value + 5000,
+                  });
+                }}
+              />
+              <span className="checkable__label-text">5,000원 쿠폰 적용</span>
+            </label>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+
+        {/* 결제하기 버튼 */}
+        <button
+          className="button"
+          style={{ marginTop: "30px" }}
+          disabled={!ready}
+          // ------ '결제하기' 버튼 누르면 결제창 띄우기 ------
+          // @docs https://docs.tosspayments.com/sdk/v2/js#widgetsrequestpayment
+          onClick={async () => {
+            try {
+              // 결제를 요청하기 전에 orderId, amount를 서버에 저장하세요.
+              // 결제 과정에서 악의적으로 결제 금액이 바뀌는 것을 확인하는 용도입니다.
+              await widgets!.requestPayment({
+                orderId: generateRandomString(),
+                orderName: "토스 티셔츠 외 2건",
+                successUrl: window.location.origin + "/success",
+                failUrl: window.location.origin + "/fail",
+                customerEmail: "customer123@gmail.com",
+                customerName: "김토스",
+                customerMobilePhone: "01012341234",
+              });
+            } catch (error) {
+              // 에러 처리하기
+              console.error(error);
+            }
+          }}
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          결제하기
+        </button>
+      </div>
     </div>
   );
 }
